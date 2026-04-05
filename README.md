@@ -2,31 +2,50 @@
 
 ## 1. Description du projet
 
-Ce projet étudie si le contenu de l'actualité financière peut contribuer à prédire l'évolution du spread de l'obligation souveraine française à 10 ans (OAT) par rapport au Bund allemand.
+Ce projet vise à étudier si le contenu de l’actualité financière permet de prédire l’évolution du spread entre les obligations souveraines françaises (OAT 10 ans) et allemandes (Bund 10 ans).
 
-À l'aide de la technique de Natural Language Processing (NLP), nous construisons des indices d'actualité macroéconomique et testons leur capacité prédictive sur la dynamique du spread entre avril 2018 et juin 2020 (période des news Reuters).
+L’objectif est d’évaluer si des signaux textuels issus de la presse économique contiennent une information exploitable pour anticiper les mouvements des marchés obligataires.
 
-L'objectif est d'évaluer si le sentiment macro-financier extrait des titres de la presse contient des informations exploitables pour les marchés obligataires.
+Nous combinons des techniques de Natural Language Processing (NLP) et de Machine Learning pour construire des indices macro-financiers et tester leur pouvoir prédictif.
 
 
 ## 2. Sources de données
 
-### Data sur les obligations souveraines
-- Source : FRED (Données économiques de la Réserve fédérale)
-- Bund allemand à 10 ans : IRLTLT01DEM156N
-- Rendement des obligations françaises à 10 ans : IRLTLT01FRM156N
-- Fréquence : Mensuelle
-- Période : Avril 2018 – Juin 2020
+### 2.1 Données de taux souverains
+- Sources : Banque de France (France 10Y) et Bundesbank (Allemagne 10Y)
+- Fréquence : quotidienne
+- Période : 2018 – 2026
+- Construction :
+Spread = France 10Y – Allemagne 10Y
+Variation (delta)
+Direction (classification binaire)
+Volatilité glissante
 
-### Data d’actualité financière
-- Source : Base de données Reuters Headlines (Kaggle)
-- Contenu : Titres et brèves descriptions
-- Période : Mars 2018 – Juillet 2020
+Ces données constituent la variable cible du projet.
+
+### 2.2 Data d’actualité financière
+
+Nous avons exploré plusieurs sources :
+
+- Reuters (Kaggle)
+  - Headlines et descriptions
+  - Période : 2018 – 2020
+
+- GDELT
+  - Base de news internationales
+  - Extraction quotidienne
+  - Filtrage Europe
+
+- Tests exploratoires
+  - Les Échos (web scraping limité)
+  - Le Monde (RSS → trop peu de données)
+
+→ GDELT s’est révélé être la source la plus exploitable pour le projet.
 
 
 ## 3. Méthodologie
 
-### 3.1 Traitement du langage naturel (NLP)
+### 3.1 Construction des features (NLP)
 
 Une approche basée sur un dictionnaire est mise en œuvre pour construire des indices de sentiment macro-financier.
 
@@ -36,60 +55,119 @@ Les mots-clés sont regroupés en quatre catégories économiques :
 - Croissance
 - Risque géopolitique
 
-Des indices mensuels sont construits en comptabilisant les occurrences des mots-clés et en les agrégeant à une fréquence mensuelle.
+Pour GDELT :
+- Filtrage des news liées à l’Europe
+- Agrégation quotidienne
+- Lissage (rolling mean)
 
-### 3.2 Ingénierie des caractéristiques
+### 3.2 Construction de la cible
 
-- Spread souverain : OAT France 10 ans – Bund de l'Allemagne 10 ans
-- Variation mensuelle du spread (delta)
-- Classification directionnelle (1 = élargissement, 0 = resserrement)
-- Volatilité glissante sur 6 mois
+Deux approches :
 
-Les indices d'actualité sont fusionnés avec les données de spread à une fréquence mensuelle.
+- Prédiction directionnelle
+    - y=1 si le spread augmente à t+1
+    - y=0 sinon
+    - Décalage des variables → pas de look-ahead bias
+
+- Prédiction de volatilité
+    - Volatilité glissante du spread
+    - Modélisation en régression
 
 ### 3.3 Sélection du modèle
 
-Deux modèles sont mis en œuvre :
+Trois modèles de classification sont mis en œuvre :
 
 - Random Forest (modèle non linéaire)
 - Régression logistique (modèle linéaire de référence - baseline)
+- Réseau de neurones (MLPClassifier)
 
-Une division chronologique des données train/test est utilisée pour éviter les biais liés à l'anticipation.
+Comme modèle de regression nous avons utilisé Ridge (volatilité).
 
-Une validation croisée de séries temporelles (rolling splits) est également mise en œuvre.
+### 3.4 Validation
 
-### 3.4 Cadre d'évaluation
+- Split temporel (train/test)
+- Cross-validation adaptée aux séries temporelles
+- Rolling out-of-sample backtest
 
-Métriques de performance :
-- Précision
-- Courbe ROC
+### 3.5 Métriques
+
+- Accuracy
+- ROC Curve
 - AUC
-- Comparaison avec une méthode de référence naïve (prédiction systématique de 0)
-- Analyse de l'importance des variables
-
-Un backtest hors échantillon glissant est réalisé pour simuler une prévision en temps réel.
+- Baseline naïf
+- Importance des variables
+- Backtest cumulatif
 
 
 ## 4. Résultats
 
-Le modèle Random Forest surpasse le modèle de baseline naïf et la régression logistique en termes de précision prédictive.
+- Prédiction du spread
+    - Performance proche du hasard (accuracy ≈ 50–57%)
+    - AUC faible (~0.5 → 0.55)
+    - Random Forest et Logistic Regression peu performants
+    - Neural Network légèrement meilleur (≈ 56%)
 
-L'analyse ROC-AUC suggère que le modèle possède un pouvoir prédictif modéré, supérieur à celui du hasard.
+→ Les modèles capturent très peu de signal exploitable
 
-L'analyse de l'importance des variables indique que les indices de risque macroéconomique et géopolitiques contribuent significativement à la prédiction de la direction de la propagation.
+- Prédiction de la volatilité
+    - R² faible
+    - Erreurs importantes
+    - Faible capacité explicative
 
-Le backtesting sur échantillon glissant démontre que les signaux issus de l'actualité peuvent fournir une capacité de prévision économiquement pertinente.
+- Analyse
+    - Les variables news ont peu d’impact
+    - Le modèle repose surtout sur la volatilité passée
+    - Signal noyé dans le bruit de marché
 
 
-## 5. Limitations
-- Période d'échantillonnage courte (2018-2020)
-- Approche NLP basée sur un dictionnaire (sans plongements lexicaux avancés)
-- Absence d'optimisation des hyperparamètres
-- Absence de modélisation des coûts de transaction lors des tests rétrospectifs
-- Granularité limitée à une fréquence mensuelle
+## 5. Interprétation économique
 
-Perspectives d'avenir :
-- Modèles NLP basés sur Transformer
-- Données à plus haute fréquence
-- Ensemble de données historiques étendu
-- Analyse d'interprétabilité SHAP
+Initialement, l’hypothèse était :
+
+Des news négatives → fuite vers les actifs sûrs (Bund) → augmentation du spread
+
+Cette intuition est économiquement valide mais :
+
+- Les news utilisées ne sont pas assez ciblées
+- L’information est déjà intégrée dans les prix
+- Les marchés obligataires sont très efficients
+
+
+## 6. Limites
+
+- Dataset limité (Reuters)
+- Approche NLP simple (keywords)
+- Pas de sentiment analysis avancé
+- Données journalières uniquement
+- Pas de coûts de transaction dans le backtest
+- Modèles peu optimisés
+
+
+## 7. Améliorations possibles
+
+- NLP avancé (BERT, embeddings)
+- Analyse de sentiment fine
+- Données intraday
+- Enrichissement des variables macro
+- Modèles plus complexes (XGBoost, LSTM)
+- SHAP / interprétabilité
+
+
+## 8. Conclusion
+
+Ce projet montre que :
+
+- La relation entre news et marchés obligataires est difficile à exploiter
+- Le signal informationnel est faible face au bruit
+- Les marchés intègrent rapidement l’information
+
+
+Malgré des résultats limités, le projet permet de :
+
+- Mettre en œuvre des méthodes de Machine Learning
+- Explorer différentes sources de données
+- Comprendre les limites des approches quantitatives
+
+
+## Auteurs
+Marion Sirol & Maxence Martini
